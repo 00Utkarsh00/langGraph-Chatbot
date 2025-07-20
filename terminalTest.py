@@ -13,7 +13,7 @@ def main(pdf_path: pathlib.Path | None = None):
     graph = build_graph()
     cfg   = {"configurable": {"thread_id": THREAD_ID}}
 
-    print("\n🤖  NVIDIA LangGraph Agent (ENTER to quit)\n")
+    print("\nNVIDIA LangGraph Agent (ENTER to quit)\n")
     while True:
         q = input("You: ").strip()
         if not q:
