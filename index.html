@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NVIDIA LangGraph Chatbot</title>
+  <style>
+    /* Reset & base */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f7fa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+    }
+    h1 {
+      margin-bottom: 1rem;
+      color: #333;
+    }
+
+    /* Chat window */
+    #chat {
+      width: 100%;
+      max-width: 600px;
+      height: 400px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 1rem;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+    .message {
+      display: flex;
+      margin-bottom: 0.75rem;
+    }
+    .message.user {
+      justify-content: flex-end;
+    }
+    .bubble {
+      max-width: 80%;
+      padding: 0.75rem 1rem;
+      border-radius: 16px;
+      position: relative;
+      line-height: 1.4;
+    }
+    .message.user .bubble {
+      background: #0078d4;
+      color: #fff;
+      border-bottom-right-radius: 0;
+    }
+    .message.bot .bubble {
+      background: #e1e8ed;
+      color: #333;
+      border-bottom-left-radius: 0;
+    }
+
+    /* Input area */
+    #input-area {
+      display: flex;
+      width: 100%;
+      max-width: 600px;
+    }
+    #input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 24px 0 0 24px;
+      font-size: 1rem;
+      outline: none;
+    }
+    #send {
+      background: #0078d4;
+      color: #fff;
+      border: none;
+      padding: 0 1.5rem;
+      font-size: 1rem;
+      border-radius: 0 24px 24px 0;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #send:hover {
+      background: #005fa3;
+    }
+
+    /* Scrollbar styling */
+    #chat::-webkit-scrollbar {
+      width: 6px;
+    }
+    #chat::-webkit-scrollbar-track {
+      background: #f4f7fa;
+    }
+    #chat::-webkit-scrollbar-thumb {
+      background: #ccc;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>NVIDIA LangGraph Chat</h1>
+  <div id="chat"></div>
+
+  <div id="input-area">
+    <input type="text" id="input" placeholder="Type your message…" autocomplete="off" />
+    <button id="send">Send</button>
+  </div>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const send  = document.getElementById('send');
+
+    function append(role, text) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message ${role}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+
+      wrapper.appendChild(bubble);
+      chat.appendChild(wrapper);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+      append('user', text);
+      input.value = '';
+      try {
+        const res = await fetch('http://localhost:8000/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const { reply } = await res.json();
+        append('bot', reply);
+      } catch (err) {
+        append('bot', 'Error: ' + err.message);
+      }
+    }
+
+    send.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+
+</body>
+</html>
