@@ -7,7 +7,7 @@ from utils.graph_builder import build_graph
 def main(pdf_path: pathlib.Path | None = None):
     pdf_path = pdf_path or DEFAULT_PDF         
     if not pdf_path.exists():
-        sys.exit(f"❌  PDF not found at {pdf_path}")
+        sys.exit(f"PDF not found at {pdf_path}")
 
     utils.tools.RETRIEVER = build_retriever(str(pdf_path))
     graph = build_graph()
