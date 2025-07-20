@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>NVIDIA LangGraph Chatbot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NVIDIA LangGraph Audio Chatbot</title>
   <style>
     /* Reset & base */
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,26 +19,26 @@
       margin-bottom: 1rem;
       color: #333;
     }
-
-    /* Chat window */
-    #chat {
+    /* Shared panel styling */
+    .panel {
       width: 100%;
       max-width: 600px;
-      height: 400px;
       background: #fff;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       padding: 1rem;
-      overflow-y: auto;
       margin-bottom: 1rem;
+    }
+    /* Chat window */
+    #chat {
+      height: 300px;
+      overflow-y: auto;
     }
     .message {
       display: flex;
       margin-bottom: 0.75rem;
     }
-    .message.user {
-      justify-content: flex-end;
-    }
+    .message.user { justify-content: flex-end; }
     .bubble {
       max-width: 80%;
       padding: 0.75rem 1rem;
@@ -55,12 +56,10 @@
       color: #333;
       border-bottom-left-radius: 0;
     }
-
     /* Input area */
     #input-area {
       display: flex;
       width: 100%;
-      max-width: 600px;
     }
     #input {
       flex: 1;
@@ -80,55 +79,80 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    #send:hover {
-      background: #005fa3;
+    #send:hover { background: #005fa3; }
+    /* Audio panel */
+    #audio-area h2, #audio-area h3 {
+      margin-top: 1rem;
+      color: #333;
     }
-
-    /* Scrollbar styling */
-    #chat::-webkit-scrollbar {
-      width: 6px;
+    #audio-area button {
+      margin-right: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #0078d4;
+      color: #fff;
+      transition: background 0.2s;
     }
-    #chat::-webkit-scrollbar-track {
-      background: #f4f7fa;
-    }
-    #chat::-webkit-scrollbar-thumb {
+    #audio-area button:disabled {
       background: #ccc;
-      border-radius: 3px;
+      cursor: default;
+    }
+    #audio-area button:hover:not(:disabled) { background: #005fa3; }
+    #audioPlayer {
+      margin-top: 1rem;
+      width: 100%;
     }
   </style>
 </head>
 <body>
+  <h1>NVIDIA LangGraph Audio Chatbot</h1>
 
-  <h1>NVIDIA LangGraph Chat</h1>
-  <div id="chat"></div>
+  <!-- Text Chat Panel -->
+  <div class="panel">
+    <div id="chat"></div>
+    <div id="input-area">
+      <input type="text" id="input" placeholder="Type your message…" autocomplete="off" />
+      <button id="send">Send</button>
+    </div>
+  </div>
 
-  <div id="input-area">
-    <input type="text" id="input" placeholder="Type your message…" autocomplete="off" />
-    <button id="send">Send</button>
+  <!-- Audio Recording & Response Panel -->
+  <div id="audio-area" class="panel">
+    <h2>Record Your Audio</h2>
+    <button id="startRecording">Start Recording</button>
+    <button id="stopRecording" disabled>Stop Recording</button>
+    <h3>Recording Status: <span id="status">Not Recording</span></h3>
+    <h2>Transcribed Text:</h2>
+    <p id="transcribedText">No speech detected yet.</p>
+    <h2>AI Response:</h2>
+    <p id="responseText">Waiting for response...</p>
+    <h2>Play AI's Response:</h2>
+    <audio id="audioPlayer" controls></audio>
   </div>
 
   <script>
+    // ——— Text Chat Logic ———
     const chat = document.getElementById('chat');
     const input = document.getElementById('input');
     const send  = document.getElementById('send');
 
-    function append(role, text) {
+    function appendMessage(role, text) {
       const wrapper = document.createElement('div');
       wrapper.className = `message ${role}`;
-
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
       bubble.textContent = text;
-
       wrapper.appendChild(bubble);
       chat.appendChild(wrapper);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    async function sendMessage() {
+    async function sendText() {
       const text = input.value.trim();
       if (!text) return;
-      append('user', text);
+      appendMessage('user', text);
       input.value = '';
       try {
         const res = await fetch('http://localhost:8000/chat', {
@@ -138,17 +162,98 @@
         });
         if (!res.ok) throw new Error(await res.text());
         const { reply } = await res.json();
-        append('bot', reply);
+        appendMessage('bot', reply);
       } catch (err) {
-        append('bot', 'Error: ' + err.message);
+        appendMessage('bot', 'Error: ' + err.message);
       }
     }
 
-    send.addEventListener('click', sendMessage);
+    send.addEventListener('click', sendText);
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') sendMessage();
+      if (e.key === 'Enter') sendText();
     });
-  </script>
 
+    // ——— Audio Recording & Transcription Logic ———
+    let mediaRecorder, recognition, audioChunks = [];
+
+    const startBtn = document.getElementById('startRecording');
+    const stopBtn  = document.getElementById('stopRecording');
+    const status   = document.getElementById('status');
+    const transcriptEl = document.getElementById('transcribedText');
+    const responseEl   = document.getElementById('responseText');
+    const audioPlayer  = document.getElementById('audioPlayer');
+
+    startBtn.addEventListener('click', () => {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+          mediaRecorder.start();
+          status.textContent = 'Recording...';
+          startBtn.disabled = true;
+          stopBtn.disabled  = false;
+
+          // Speech-to-text
+          if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+            recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+            recognition.onresult = e => {
+              transcriptEl.textContent = e.results[e.resultIndex][0].transcript;
+            };
+            recognition.onerror = e => console.error('Speech recog error:', e.error);
+            recognition.start();
+          } else {
+            alert('Speech recognition not supported in your browser.');
+          }
+        })
+        .catch(err => {
+          console.error('Mic error:', err);
+          alert('Error accessing microphone. Please check permissions.');
+        });
+    });
+
+    stopBtn.addEventListener('click', () => {
+      mediaRecorder.stop();
+      recognition && recognition.stop();
+      status.textContent = 'Recording stopped. Processing…';
+      stopBtn.disabled = true;
+      // Give recognition a moment to finalize
+      setTimeout(sendAudioText, 500);
+    });
+
+    async function sendAudioText() {
+      const text = transcriptEl.textContent;
+      if (!text || text === 'No speech detected yet.') {
+        alert('Please speak something to transcribe.');
+        status.textContent = 'Not Recording';
+        startBtn.disabled = false;
+        return;
+      }
+      try {
+        const res = await fetch('http://localhost:8000/audio-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          responseEl.textContent = 'Error: ' + (data.detail || res.statusText);
+        } else {
+          responseEl.textContent = data.reply;
+          audioPlayer.src = `http://localhost:8000${data.audio_url}`;
+          audioPlayer.play();
+        }
+      } catch (err) {
+        console.error('Audio-chat error:', err);
+        responseEl.textContent = 'Error sending the request.';
+      } finally {
+        status.textContent = 'Not Recording';
+        startBtn.disabled = false;
+      }
+    }
+  </script>
 </body>
 </html>
