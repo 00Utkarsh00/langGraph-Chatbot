@@ -78,7 +78,7 @@ Based on the user message, the router determines one of four options:
 ### Functionality Breakdown
 
 1. **RAG Runner**: Adds context from the NVIDIA document to the user query before passing it to the LLM.  
-2. **Stock Price Fetcher**: Provides real-time stock prices using custom functions.  
+2. **Stock Price Fetcher**: Provides real-time stock prices using custom functions.  used https://finazon.io/ for api
 
 - For `rag` and `both` paths, RAG context is included in the query.  
 - For `chit_chat`, no additional functions or context are used.  
